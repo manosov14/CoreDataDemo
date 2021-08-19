@@ -20,8 +20,7 @@ class TaskListViewController: UITableViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellID)
         setupNavigationBar()
         
-        //Получить данные из Core Data
-        StorageManager.shared.fetchData() { taskList in
+        StorageManager.shared.fetchDataFromContext() { taskList in
             self.taskList = taskList
         }
     }
@@ -74,23 +73,29 @@ class TaskListViewController: UITableViewController {
         present(alert, animated: true)
     }
     
-    private func saveTask(_ taskName: String) {
+    private func showEditingAlert(title: String, message: String) {
         
-        //Создание экземпляра сущности
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        let saveAction = UIAlertAction(title: "Save", style: .default) { _ in
+            guard let task = alert.textFields?.first?.text, !task.isEmpty else { return }
+            self.saveTask(task)
+        }
+        let cancelAction = UIAlertAction(title: "Cancel", style: .destructive)
+        alert.addAction(cancelAction)
+        alert.addAction(saveAction)
+        alert.addTextField { textField in
+            textField.placeholder = "New Task"
+        }
+        present(alert, animated: true)
+    }
+    
+    private func saveTask(_ taskName: String) {
         StorageManager.shared.getEntity { task in
-            
-            //Добавление полученного экземпляра task в массив taskList
-            print(task)
+            print(taskName)
             self.taskList.append(task)
-
-            
-            //Определение индекса строки для добавления
+            task.name = taskName
             let cellIndex = IndexPath(row: self.taskList.count - 1, section: 0)
-            
-            //Добавление новой строки по полученному индексу
             self.tableView.insertRows(at: [cellIndex], with: .automatic)
-            
-            //Сохранение контекста
             if self.context.hasChanges {
                 do {
                     try self.context.save()
@@ -98,11 +103,9 @@ class TaskListViewController: UITableViewController {
                     print(error.localizedDescription)
                 }
             }
-            
         }
     }
 }
-
 
 extension TaskListViewController {
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -118,21 +121,35 @@ extension TaskListViewController {
         return cell
     }
     
-    override func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-        return UISwipeActionsConfiguration(actions: [])
-    }
-    
-    // Функция для создания действия редактирования
     func editAction(at indexPath: IndexPath) -> UIContextualAction {
         let action = UIContextualAction(style: .normal, title: "Edit") { (action, view, competion) in
-            self.taskList.remove(at: indexPath.row)
-            self.tableView.deleteRows(at: [indexPath], with: .automatic)
-            self.showAlert(with: "Edit", and: "Edit your task")
+            self.showEditingAlert(title: "Edit", message: "Edit your task")
             competion(true)
         }
+        
+        action.backgroundColor = .systemOrange
         return action
     }
     
-
+    func deleteAction(at indexPath: IndexPath) -> UIContextualAction {
+        let action = UIContextualAction(style: .normal, title: "Delete") { (action, view, competion) in
+            self.taskList.remove(at: indexPath.row)
+            self.tableView.deleteRows(at: [indexPath], with: .automatic)
+            competion(true)
+        }
+        
+        action.backgroundColor = .systemRed
+        return action
+    }
+     
+    override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        let deleteAction = deleteAction(at: indexPath)
+        return UISwipeActionsConfiguration(actions: [deleteAction])
+    }
+    
+    override func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        let editingAction = editAction(at: indexPath)
+        return UISwipeActionsConfiguration(actions: [editingAction])
+    }
 }
 
